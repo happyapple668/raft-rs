@@ -28,7 +28,6 @@
 use errors::Error;
 use fxhash::FxHashMap;
 use std::cmp;
-use std::collections::hash_map::HashMap;
 
 /// The state of the progress.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -51,114 +50,139 @@ impl Default for ProgressState {
 /// which could be `Leader`, `Follower` and `Learner`.
 #[derive(Default, Clone)]
 pub struct ProgressSet {
-    voters: FxHashMap<u64, Progress>,
-    learners: FxHashMap<u64, Progress>,
+    progress: FxHashMap<u64, Progress>,
 }
 
 impl ProgressSet {
     /// Creates a new ProgressSet.
-    pub fn new(voter_size: usize, learner_size: usize) -> Self {
+    pub fn new() -> Self {
         ProgressSet {
-            voters: HashMap::with_capacity_and_hasher(voter_size, Default::default()),
-            learners: HashMap::with_capacity_and_hasher(learner_size, Default::default()),
+            progress: Default::default(),
         }
     }
 
     /// Returns the status of voters.
-    pub fn voters(&self) -> &FxHashMap<u64, Progress> {
-        &self.voters
+    pub fn voters(&self) -> impl Iterator<Item = (&u64, &Progress)> {
+        self.progress.iter().filter(|&(_, v)| !v.is_learner)
     }
 
     /// Returns the status of learners.
-    pub fn learners(&self) -> &FxHashMap<u64, Progress> {
-        &self.learners
+    pub fn learners(&self) -> impl Iterator<Item = (&u64, &Progress)> {
+        self.progress.iter().filter(|&(_, v)| v.is_learner)
     }
 
-    /// Returns the ids of all known nodes.
-    pub fn nodes(&self) -> Vec<u64> {
-        let mut nodes = Vec::with_capacity(self.voters.len());
-        nodes.extend(self.voters.keys());
-        nodes.sort();
-        nodes
+    /// Returns the mutable status of voters.
+    pub fn voters_mut(&mut self) -> impl Iterator<Item = (&u64, &mut Progress)> {
+        self.progress.iter_mut().filter(|(_, v)| !v.is_learner)
+    }
+
+    /// Returns the mutable status of learners.
+    pub fn learners_mut(&mut self) -> impl Iterator<Item = (&u64, &mut Progress)> {
+        self.progress.iter_mut().filter(|(_, v)| v.is_learner)
+    }
+
+    /// Returns if the progress set contains a voter by the given id.
+    pub fn has_voter(&self, id: u64) -> bool {
+        if let Some(progress) = self.progress.get(&id) {
+            !progress.is_learner
+        } else {
+            false
+        }
+    }
+
+    /// Returns if the progress set contains a learner by the given id.
+    pub fn has_learner(&self, id: u64) -> bool {
+        if let Some(progress) = self.progress.get(&id) {
+            progress.is_learner
+        } else {
+            false
+        }
+    }
+
+    /// Returns if the progress set contains a peer by the given id.
+    pub fn has_peer(&self, id: u64) -> bool {
+        self.progress.contains_key(&id)
+    }
+
+    /// Returns the ids of all known voters.
+    pub fn voter_ids(&self) -> impl Iterator<Item = &u64> {
+        self.voters().map(|(k, _v)| k)
     }
 
     /// Returns the ids of all known learners.
-    pub fn learner_nodes(&self) -> Vec<u64> {
-        let mut ids = Vec::with_capacity(self.learners.len());
-        ids.extend(self.learners.keys());
-        ids.sort();
-        ids
+    pub fn learner_ids(&self) -> impl Iterator<Item = &u64> {
+        self.learners().map(|(k, _v)| k)
     }
 
     /// Grabs a reference to the progress of a node.
     pub fn get(&self, id: u64) -> Option<&Progress> {
-        self.voters.get(&id).or_else(|| self.learners.get(&id))
+        self.progress.get(&id)
     }
 
     /// Grabs a mutable reference to the progress of a node.
     pub fn get_mut(&mut self, id: u64) -> Option<&mut Progress> {
-        let progress = self.voters.get_mut(&id);
-        if progress.is_none() {
-            return self.learners.get_mut(&id);
-        }
-        progress
+        self.progress.get_mut(&id)
     }
 
     /// Returns an iterator across all the nodes and their progress.
     pub fn iter(&self) -> impl Iterator<Item = (&u64, &Progress)> {
-        self.voters.iter().chain(&self.learners)
+        self.progress.iter()
     }
 
     /// Returns a mutable iterator across all the nodes and their progress.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&u64, &mut Progress)> {
-        self.voters.iter_mut().chain(&mut self.learners)
+        self.progress.iter_mut()
     }
 
     /// Adds a voter node
-    pub fn insert_voter(&mut self, id: u64, pr: Progress) -> Result<(), Error> {
-        if self.voters.contains_key(&id) {
-            Err(Error::Exists(id, "voters"))?
+    pub fn insert_voter(&mut self, id: u64, mut pr: Progress) -> Result<(), Error> {
+        if let Some(progress) = self.progress.get(&id) {
+            Err(Error::Exists(
+                id,
+                if progress.is_learner {
+                    "learners"
+                } else {
+                    "voters"
+                },
+            ))?;
         }
-        if self.learners.contains_key(&id) {
-            Err(Error::Exists(id, "learners"))?;
-        }
-        self.voters.insert(id, pr);
+        pr.is_learner = false;
+        self.progress.insert(id, pr);
         Ok(())
     }
 
     /// Adds a learner to the cluster
-    pub fn insert_learner(&mut self, id: u64, pr: Progress) -> Result<(), Error> {
-        if self.voters.contains_key(&id) {
-            Err(Error::Exists(id, "voters"))?
+    pub fn insert_learner(&mut self, id: u64, mut pr: Progress) -> Result<(), Error> {
+        if let Some(progress) = self.progress.get(&id) {
+            Err(Error::Exists(
+                id,
+                if progress.is_learner {
+                    "learners"
+                } else {
+                    "voters"
+                },
+            ))?;
         }
-        if self.learners.contains_key(&id) {
-            Err(Error::Exists(id, "learners"))?
-        }
-        self.learners.insert(id, pr);
+        pr.is_learner = true;
+        self.progress.insert(id, pr);
         Ok(())
     }
 
     /// Removes the peer from the set of voters or learners.
     pub fn remove(&mut self, id: u64) -> Option<Progress> {
-        match self.voters.remove(&id) {
-            None => self.learners.remove(&id),
-            some => some,
-        }
+        self.progress.remove(&id)
     }
 
     /// Promote a learner to a peer.
     pub fn promote_learner(&mut self, id: u64) -> Result<(), Error> {
-        if self.voters.contains_key(&id) {
-            Err(Error::Exists(id, "voters"))?;
-        }
-        // We don't want to remove it unless it's there.
-        if self.learners.contains_key(&id) {
-            let mut learner = self.learners.remove(&id).unwrap(); // We just checked!
-            learner.is_learner = false;
-            self.voters.insert(id, learner);
-            Ok(())
-        } else {
-            Err(Error::NotExists(id, "learners"))
+        match self.progress.get_mut(&id) {
+            Some(ref progress) if !progress.is_learner =>
+                Err(Error::Exists(id, "voters"))?,
+            Some(progress) => {
+                progress.is_learner = false;
+                Ok(())
+            }
+            None => Err(Error::NotExists(id, "learners")),
         }
     }
 }
@@ -209,6 +233,16 @@ pub struct Progress {
 }
 
 impl Progress {
+    /// Creates a new progress with the given settings.
+    pub fn new(next_idx: u64, is_learner: bool, ins_size: usize) -> Self {
+        Progress {
+            next_idx,
+            is_learner,
+            ins: Inflights::new(ins_size),
+            ..Default::default()
+        }
+    }
+
     fn reset_state(&mut self, state: ProgressState) {
         self.paused = false;
         self.pending_snapshot = 0;

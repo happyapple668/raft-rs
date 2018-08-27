@@ -125,12 +125,12 @@ impl ProgressSet {
     }
 
     /// Returns an iterator across all the nodes and their progress.
-    pub fn iter(&self) -> impl Iterator<Item = (&u64, &Progress)> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&u64, &Progress)> {
         self.progress.iter()
     }
 
     /// Returns a mutable iterator across all the nodes and their progress.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&u64, &mut Progress)> {
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (&u64, &mut Progress)> {
         self.progress.iter_mut()
     }
 

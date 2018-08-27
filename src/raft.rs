@@ -1848,7 +1848,10 @@ impl<T: Storage> Raft<T> {
     }
 
     fn add_voter_or_learner(&mut self, id: u64, learner: bool) {
-        debug!("Adding node (learner: {}) with ID {} to peers.", learner, id);
+        debug!(
+            "Adding node (learner: {}) with ID {} to peers.",
+            learner, id
+        );
         let progress = Progress::new(self.raft_log.last_index(), self.max_inflight, learner);
         // Ignore redundant inserts.
         if let Some(progress) = self.prs().get(id) {

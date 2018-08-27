@@ -176,8 +176,7 @@ impl ProgressSet {
     /// Promote a learner to a peer.
     pub fn promote_learner(&mut self, id: u64) -> Result<(), Error> {
         match self.progress.get_mut(&id) {
-            Some(ref progress) if !progress.is_learner =>
-                Err(Error::Exists(id, "voters"))?,
+            Some(ref progress) if !progress.is_learner => Err(Error::Exists(id, "voters"))?,
             Some(progress) => {
                 progress.is_learner = false;
                 Ok(())

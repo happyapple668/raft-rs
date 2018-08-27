@@ -234,11 +234,11 @@ pub struct Progress {
 
 impl Progress {
     /// Creates a new progress with the given settings.
-    pub fn new(next_idx: u64, is_learner: bool, ins_size: usize) -> Self {
+    pub fn new(next_idx: u64, ins_size: usize, is_learner: bool) -> Self {
         Progress {
             next_idx,
-            is_learner,
             ins: Inflights::new(ins_size),
+            is_learner,
             ..Default::default()
         }
     }

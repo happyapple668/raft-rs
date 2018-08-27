@@ -266,13 +266,13 @@ impl<T: Storage> Raft<T> {
             tag: c.tag.to_owned(),
         };
         for p in peers {
-            let pr = Progress::new(r.raft_log.last_index() + 1, false, r.max_inflight);
+            let pr = Progress::new(r.raft_log.last_index() + 1, r.max_inflight, true);
             if let Err(e) = r.mut_prs().insert_voter(*p, pr) {
                 panic!("{}", e);
             }
         }
         for p in learners {
-            let pr = Progress::new(r.raft_log.last_index() + 1, true, r.max_inflight);
+            let pr = Progress::new(r.raft_log.last_index() + 1, r.max_inflight, true);
             if let Err(e) = r.mut_prs().insert_learner(*p, pr) {
                 panic!("{}", e);
             };
@@ -615,7 +615,7 @@ impl<T: Storage> Raft<T> {
         let (last_index, max_inflight) = (self.raft_log.last_index(), self.max_inflight);
         let self_id = self.id;
         for (&id, pr) in self.mut_prs().iter_mut() {
-            *pr = Progress::new(last_index + 1, pr.is_learner, max_inflight);
+            *pr = Progress::new(last_index + 1, max_inflight, pr.is_learner);
             if id == self_id {
                 pr.matched = last_index;
             }
@@ -1849,7 +1849,7 @@ impl<T: Storage> Raft<T> {
 
     fn add_voter_or_learner(&mut self, id: u64, learner: bool) {
         debug!("Adding node (learner: {}) with ID {} to peers.", learner, id);
-        let progress = Progress::new(self.raft_log.last_index(), learner, self.max_inflight);
+        let progress = Progress::new(self.raft_log.last_index(), self.max_inflight, learner);
         // Ignore redundant inserts.
         if let Some(progress) = self.prs().get(id) {
             if progress.is_learner == learner {
@@ -1910,7 +1910,7 @@ impl<T: Storage> Raft<T> {
 
     /// Updates the progress of the learner or voter.
     pub fn set_progress(&mut self, id: u64, matched: u64, next_idx: u64, is_learner: bool) {
-        let mut p = Progress::new(next_idx, is_learner, self.max_inflight);
+        let mut p = Progress::new(next_idx, self.max_inflight, is_learner);
         p.matched = matched;
         if is_learner {
             if let Err(e) = self.mut_prs().insert_learner(id, p) {

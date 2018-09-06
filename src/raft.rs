@@ -356,7 +356,7 @@ impl<T: Storage> Raft<T> {
     }
 
     fn quorum(&self) -> usize {
-        quorum(self.prs().voters().count())
+        quorum(self.prs().num_voters())
     }
 
     /// For testing leader lease

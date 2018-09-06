@@ -25,3 +25,4 @@ matrix:
 
 script:
   - cargo test --all -- --nocapture
+  - cargo test --tests --features failpoint -- --nocapture 

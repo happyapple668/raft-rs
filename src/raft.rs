@@ -28,7 +28,7 @@
 use std::cmp;
 
 use eraftpb::{Entry, EntryType, HardState, Message, MessageType, Snapshot};
-use fxhash::FxHashMap;
+use fxhash::{FxHashMap, FxHashSet};
 use protobuf::RepeatedField;
 use rand::{self, Rng};
 
@@ -266,13 +266,13 @@ impl<T: Storage> Raft<T> {
             tag: c.tag.to_owned(),
         };
         for p in peers {
-            let pr = Progress::new(r.raft_log.last_index() + 1, r.max_inflight, true);
+            let pr = Progress::new(r.raft_log.last_index() + 1, r.max_inflight);
             if let Err(e) = r.mut_prs().insert_voter(*p, pr) {
                 panic!("{}", e);
             }
         }
         for p in learners {
-            let pr = Progress::new(r.raft_log.last_index() + 1, r.max_inflight, true);
+            let pr = Progress::new(r.raft_log.last_index() + 1, r.max_inflight);
             if let Err(e) = r.mut_prs().insert_learner(*p, pr) {
                 panic!("{}", e);
             };
@@ -621,7 +621,7 @@ impl<T: Storage> Raft<T> {
         let (last_index, max_inflight) = (self.raft_log.last_index(), self.max_inflight);
         let self_id = self.id;
         for (&id, pr) in self.mut_prs().iter_mut() {
-            *pr = Progress::new(last_index + 1, max_inflight, pr.is_learner);
+            *pr = Progress::new(last_index + 1, max_inflight);
             if id == self_id {
                 pr.matched = last_index;
             }
@@ -1858,13 +1858,11 @@ impl<T: Storage> Raft<T> {
             "Adding node (learner: {}) with ID {} to peers.",
             learner, id
         );
-        let progress = Progress::new(self.raft_log.last_index(), self.max_inflight, learner);
+        let progress = Progress::new(self.raft_log.last_index(), self.max_inflight);
         // Ignore redundant inserts.
-        if let Some(progress) = self.prs().get(id) {
-            if progress.is_learner == learner {
-                return;
-            }
-        };
+        if (learner && self.prs().has_learner(id)) || (!learner && self.prs().has_voter(id)) {
+            return;
+        }
 
         let result = if learner {
             self.mut_prs().insert_learner(id, progress)
@@ -1919,7 +1917,7 @@ impl<T: Storage> Raft<T> {
 
     /// Updates the progress of the learner or voter.
     pub fn set_progress(&mut self, id: u64, matched: u64, next_idx: u64, is_learner: bool) {
-        let mut p = Progress::new(next_idx, self.max_inflight, is_learner);
+        let mut p = Progress::new(next_idx, self.max_inflight);
         p.matched = matched;
         if is_learner {
             if let Err(e) = self.mut_prs().insert_learner(id, p) {
@@ -1995,12 +1993,13 @@ impl<T: Storage> Raft<T> {
     fn check_quorum_active(&mut self) -> bool {
         let self_id = self.id;
         let mut act = 0;
+        let learners = self.prs().learner_ids().cloned().collect::<FxHashSet<_>>();
         for (&id, pr) in self.mut_prs().iter_mut() {
             if id == self_id {
                 act += 1;
                 continue;
             }
-            if !pr.is_learner && pr.recent_active {
+            if !learners.contains(&id) && pr.recent_active {
                 act += 1;
             }
             pr.recent_active = false;

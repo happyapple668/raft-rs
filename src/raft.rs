@@ -584,7 +584,7 @@ impl<T: Storage> Raft<T> {
     pub fn maybe_commit(&mut self) -> bool {
         let mut mis_arr = [0; 5];
         let mut mis_vec;
-        let voters = self.prs().voters().count();
+        let voters = self.prs().num_voters();
         let mis = if voters <= 5 {
             &mut mis_arr[..voters]
         } else {

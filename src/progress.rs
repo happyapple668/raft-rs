@@ -78,19 +78,14 @@ impl ProgressSet {
                 FxBuildHasher::default(),
             ),
             configuration: Configuration {
-                voters: HashSet::with_capacity_and_hasher(
-                    voters + learners,
-                    FxBuildHasher::default(),
-                ),
-                learners: HashSet::with_capacity_and_hasher(
-                    voters + learners,
-                    FxBuildHasher::default(),
-                ),
+                voters: HashSet::with_capacity_and_hasher(voters, FxBuildHasher::default()),
+                learners: HashSet::with_capacity_and_hasher(learners, FxBuildHasher::default()),
             },
         }
     }
 
     /// Returns the status of voters.
+    #[inline]
     pub fn voters(&self) -> impl Iterator<Item = (&u64, &Progress)> {
         self.progress
             .iter()
@@ -98,6 +93,7 @@ impl ProgressSet {
     }
 
     /// Returns the status of learners.
+    #[inline]
     pub fn learners(&self) -> impl Iterator<Item = (&u64, &Progress)> {
         self.progress
             .iter()
@@ -105,6 +101,7 @@ impl ProgressSet {
     }
 
     /// Returns the mutable status of voters.
+    #[inline]
     pub fn voters_mut(&mut self) -> impl Iterator<Item = (&u64, &mut Progress)> {
         let configuration = &self.configuration;
         self.progress
@@ -113,6 +110,7 @@ impl ProgressSet {
     }
 
     /// Returns the mutable status of learners.
+    #[inline]
     pub fn learners_mut(&mut self) -> impl Iterator<Item = (&u64, &mut Progress)> {
         let configuration = &self.configuration;
         self.progress
@@ -121,61 +119,73 @@ impl ProgressSet {
     }
 
     /// Returns if the progress set contains a voter by the given id.
+    #[inline]
     pub fn has_voter(&self, id: u64) -> bool {
         self.configuration.voters.contains(&id)
     }
 
     /// Returns the number of voters in the current configuration.
+    #[inline]
     pub fn num_voters(&self) -> usize {
         self.configuration.voters.len()
     }
 
     /// Returns the number of learners in the current configuration.
+    #[inline]
     pub fn num_learners(&self) -> usize {
         self.configuration.learners.len()
     }
 
     /// Returns if the progress set contains a learner by the given id.
+    #[inline]
     pub fn has_learner(&self, id: u64) -> bool {
         self.configuration.learners.contains(&id)
     }
 
     /// Returns if the progress set contains a peer by the given id.
+    #[inline]
     pub fn has_peer(&self, id: u64) -> bool {
         self.progress.contains_key(&id)
     }
 
     /// Returns the ids of all known voters.
+    #[inline]
     pub fn voter_ids(&self) -> impl Iterator<Item = &u64> {
         self.configuration.voters.iter()
     }
 
     /// Returns the ids of all known learners.
+    #[inline]
     pub fn learner_ids(&self) -> impl Iterator<Item = &u64> {
         self.configuration.learners.iter()
     }
 
     /// Grabs a reference to the progress of a node.
+    #[inline]
     pub fn get(&self, id: u64) -> Option<&Progress> {
         self.progress.get(&id)
     }
 
     /// Grabs a mutable reference to the progress of a node.
+    #[inline]
     pub fn get_mut(&mut self, id: u64) -> Option<&mut Progress> {
         self.progress.get_mut(&id)
     }
 
     /// Returns an iterator across all the nodes and their progress.
+    #[inline]
     pub fn iter(&self) -> impl ExactSizeIterator<Item = (&u64, &Progress)> {
         self.progress.iter()
     }
 
     /// Returns a mutable iterator across all the nodes and their progress.
+    #[inline]
     pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (&u64, &mut Progress)> {
         self.progress.iter_mut()
     }
 
     /// Adds a voter node
+    #[inline]
     pub fn insert_voter(&mut self, id: u64, mut pr: Progress) -> Result<(), Error> {
         if self.has_learner(id) {
             Err(Error::Exists(id, "learners"))?;
